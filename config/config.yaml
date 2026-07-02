@@ -1,0 +1,40 @@
+# FinCompliance-NLP 全局配置文件
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  synthetic_dir: data/synthetic
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+
+model:
+  name: bert-base-chinese
+  num_labels: 2
+  max_length: 512
+
+train:
+  epochs: 10
+  batch_size: 16
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  output_dir: models/bert_base
+
+compress:
+  quantize:
+    method: dynamic  # dynamic / static / qat
+  distill:
+    student_model: models/distilled_student
+    temperature: 4.0
+    alpha: 0.5
+  prune:
+    method: structured  # structured / unstructured
+    sparsity: 0.3
+
+evaluate:
+  metrics: ["accuracy", "f1", "precision", "recall"]
+
+inference:
+  model_dir: models/bert_base
+  device: auto
