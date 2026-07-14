@@ -1,0 +1,23 @@
+# Docker 构建忽略规则
+.git
+.gitignore
+.idea
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+.env
+
+# 数据与模型（通过 volume 挂载，不打包进镜像）
+data/
+models/
+logs/
+
+# 其他
+*.md
+!README.md
+assets/
+demo/templates/

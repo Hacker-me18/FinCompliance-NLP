@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能文本多分类可视化系统 - 动态报告高级版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .scan-line {
+            animation: scan 2s linear infinite;
+        }
+        /* 粒子飘行动画 */
+        @keyframes floatParticle {
+            0% { transform: translate(0, 0) scale(1) ; opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 0.8; }
+            100% { transform: translate(var(--mx), var(--my)) scale(0.5); opacity: 0; }
+        }
+        .particle {
+            animation: floatParticle 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+        /* 流光卡片边框 */
+        @keyframes borderGlow {
+            0%, 100% { border-color: rgba(59, 130, 246, 0.5); box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
+            50% { border-color: var(--theme-color); box-shadow: 0 0 30px var(--theme-color); }
+        }
+        .active-glow {
+            animation: borderGlow 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans overflow-x-hidden selection:bg-blue-500 selection:text-white">
+
+    <div id="app" class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="text-center mb-10 relative">
+            <h1 class="text-4xl font-extrabold tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 mb-2">
+                制造业合同财务风险智能识别系统
+            </h1>
+            <p class="text-slate-400 text-sm tracking-widest">REAL-TIME FLASK API INTEGRATION & RANKED CONFIDENCE REPORT</p>
+            <div class="h-[1px] w-1/4 bg-gradient-to-r from-transparent via-blue-500 to-transparent mx-auto mt-4"></div>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <section class="lg:col-span-1 bg-slate-800/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="text-sm font-semibold text-blue-400 tracking-wider flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                            输入待分析文本
+                        </label>
+                        <span class="text-xs text-slate-500">{{ textInput.length }} 字</span>
+                    </div>
+
+                    <div class="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 focus-within:border-blue-500 transition-colors">
+                        <textarea
+                            v-model="textInput"
+                            :disabled="isAnalyzing"
+                            placeholder="请粘贴或输入新闻、评论等文本内容进行智能类别预测..."
+                            class="w-full h-48 p-4 bg-transparent resize-none text-sm text-slate-300 focus:outline-none leading-relaxed"
+                        ></textarea>
+                        <div v-if="isAnalyzing" class="absolute top-0 left-0 w-full h-0.5 bg-blue-500/50 blur-[2px] scan-line"></div>
+                    </div>
+                </div>
+
+                <div class="mt-6 relative" id="button-container">
+                    <button
+                        @click="startAnalysis"
+                        :disabled="isAnalyzing || !textInput.trim()"
+                        class="w-full py-4 px-6 rounded-xl font-bold tracking-wide transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-[0_4px_20px_rgba(37,99,235,0.3)] hover:shadow-[0_4px_25px_rgba(37,99,235,0.5)] active:scale-[0.98]"
+                    >
+                        <svg v-if="isAnalyzing" class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>{{ isAnalyzing ? '模型深度推理中...' : '开始智能分类' }}</span>
+                    </button>
+
+                    <div v-if="errorMessage" class="text-xs text-red-400 mt-2 text-center bg-red-500/10 border border-red-500/20 py-2 rounded-lg">
+                        ⚠️ 接口请求失败：{{ errorMessage }}
+                    </div>
+
+                    <div
+                        v-for="p in particles"
+                        :key="p.id"
+                        class="particle absolute px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-xs text-blue-300 pointer-events-none whitespace-nowrap z-50 font-mono"
+                        :style="{
+                            left: p.x + 'px',
+                            top: p.y + 'px',
+                            '--mx': p.mx + 'px',
+                            '--my': p.my + 'px'
+                        }"
+                    >
+                        {{ p.word }}
+                    </div>
+                </div>
+            </section>
+
+            <section class="lg:col-span-2 bg-slate-900/60 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl flex flex-col justify-between">
+                <div class="w-full">
+                    <h3 class="text-sm font-semibold text-purple-400 tracking-wider mb-4 flex items-center justify-between">
+                        <span class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                            模型决策置信度报告（过滤 &lt;30% 类别并从大到小降序）
+                        </span>
+                        <span v-if="resultIndex !== null && !isAnalyzing" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">
+                            命中最大ID: {{ resultIndex }}
+                        </span>
+                    </h3>
+
+                    <div v-if="resultIndex === null && !isAnalyzing" class="h-56 border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500">
+                        <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                        <p class="text-sm">等待输入文本并点击分类执行推理</p>
+                    </div>
+
+                    <div v-else class="space-y-4 max-h-[250px] overflow-y-auto pr-2">
+                        <div v-if="isAnalyzing" class="text-center py-10 text-slate-500 font-mono text-sm animate-pulse">
+                            正在读取后端对各标签分类的概率分布矩阵...
+                        </div>
+
+                        <div
+                            v-else
+                            v-for="(item, idx) in rankedConfidenceList"
+                            :key="item.id"
+                            class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 flex flex-col gap-2 transition-all duration-300"
+                            :class="idx === 0 ? 'border-l-4' : ''"
+                            :style="idx === 0 ? { borderColor: item.color } : {}"
+                        >
+                            <div class="flex justify-between items-center text-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">{{ item.icon }}</span>
+                                    <span class="font-bold text-slate-200 text-sm">{{ item.name }}</span>
+                                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">ID: {{ item.id }}</span>
+                                    <span v-if="idx === 0" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded font-bold">MAX WINNER</span>
+                                </div>
+                                <div class="font-mono font-black text-sm" :style="{ color: item.color }">
+                                    {{ item.prob.toFixed(1) }}%
+                                </div>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden p-[1px]">
+                                <div
+                                    class="h-full rounded-full transition-all duration-500"
+                                    :style="{
+                                        width: item.prob + '%',
+                                        backgroundColor: item.color,
+                                        boxShadow: '0 0 10px ' + item.color + '50'
+                                    }"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div v-if="!isAnalyzing && rankedConfidenceList.length === 0" class="text-center py-6 text-amber-500/70 text-xs border border-dashed border-amber-500/20 rounded-xl">
+                            ⚠️ 没有任何标签的置信度大于 30.0% ，置信度报告已被过滤器过滤清空。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500 font-mono">
+                    <div>THRESHOLD FILTER: <span class="text-amber-400">&gt;= 0.3 (30%)</span></div>
+                    <div>SORT ORDER: <span class="text-blue-400">DESCENDING (从大到小)</span></div>
+                </div>
+            </section>
+        </main>
+
+        <section>
+            <h2 class="text-sm font-semibold text-slate-400 tracking-widest uppercase mb-6 flex items-center gap-2">
+                <span>🎨 风险标签矩阵卡片 (Channels)</span>
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                <div
+                    v-for="tag in tags"
+                    :key="tag.id"
+                    class="bg-slate-900/40 backdrop-blur-md rounded-xl p-4 border border-slate-800/80 transition-all duration-500 relative overflow-hidden flex flex-col items-center justify-center text-center cursor-default select-none"
+                    :class="{
+                        'opacity-50 scale-95': resultIndex !== null && resultIndex !== tag.id && !isAnalyzing,
+                        'scale-105 active-glow z-10': resultIndex === tag.id && !isAnalyzing,
+                        'hover:border-slate-700': resultIndex === null || isAnalyzing
+                    }"
+                    :style="{
+                        '--theme-color': tag.color,
+                        transform: resultIndex === tag.id && !isAnalyzing ? 'scale(1.06) translateY(-4px)' : ''
+                    }"
+                >
+                    <span class="absolute top-2 left-3 font-mono text-[10px] text-slate-400 font-bold">ID: {{ tag.id }}</span>
+
+                    <div
+                        class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-3 transition-all duration-500"
+                        :style="{
+                            backgroundColor: resultIndex === tag.id && !isAnalyzing ? tag.color + '25' : '#1e293b50',
+                            color: resultIndex === tag.id && !isAnalyzing ? tag.color : '#94a3b8',
+                            boxShadow: resultIndex === tag.id && !isAnalyzing ? '0 0 15px ' + tag.color + '30' : 'none'
+                        }"
+                        :class="{'animate-pulse': resultIndex === tag.id && !isAnalyzing}"
+                    >
+                        {{ tag.icon }}
+                    </div>
+
+                    <div class="text-xs font-bold tracking-wider transition-colors duration-300" :class="resultIndex === tag.id && !isAnalyzing ? 'text-slate-100' : 'text-slate-400'">
+                        {{ tag.name }}
+                    </div>
+
+                    <div v-if="resultIndex === tag.id && confidenceArray.length > tag.id && !isAnalyzing" class="text-[10px] font-mono mt-1 text-emerald-400 font-bold">
+                        🏆 {{ (confidenceArray[tag.id] * 100).toFixed(1) }}%
+                    </div>
+                    <div v-else class="text-[9px] font-mono mt-0.5 text-slate-400 uppercase tracking-widest">
+                        {{ tag.alias }}
+                    </div>
+
+                    <div
+                        v-if="resultIndex === tag.id && !isAnalyzing"
+                        class="absolute inset-0 opacity-[0.03] pointer-events-none transition-opacity duration-500"
+                        :style="{ backgroundColor: tag.color }"
+                    ></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                const textInput = ref('在这里输入需要模型进行条款合规及风险评估的文本内容...');
+                const isAnalyzing = ref(false);
+                const resultIndex = ref(null);
+                const confidenceArray = ref([]);
+                const particles = ref([]);
+                const errorMessage = ref('');
+
+                // 🌟 更新为全新对应的六分类结构定义
+                const tags = [
+                    { id: 0, name: '正常条款', alias: 'normal_clause', icon: '✅', color: '#22c55e' },
+                    { id: 1, name: '付款周期风险', alias: 'payment_risk', icon: '⏳', color: '#eab308' },
+                    { id: 2, name: '税务发票风险', alias: 'tax_invoice_risk', icon: '🧾', color: '#06b6d4' },
+                    { id: 3, name: '交付验收风险', alias: 'delivery_acceptance_risk', icon: '📦', color: '#6366f1' },
+                    { id: 4, name: '违约责任风险', alias: 'liability_penalty_risk', icon: '⚠️', color: '#ef4444' },
+                    { id: 5, name: '财务合规风险', alias: 'financial_compliance_risk', icon: '💰', color: '#f97316' }
+                ];
+
+                const rankedConfidenceList = computed(() => {
+                    if (confidenceArray.value.length === 0) return [];
+
+                    return confidenceArray.value
+                        .map((prob, id) => {
+                            const percentProb = prob <= 1.0 && prob > 0 ? prob * 100 : prob;
+                            const staticInfo = tags.find(t => t.id === id) || {};
+                            return {
+                                id: id,
+                                prob: percentProb,
+                                name: staticInfo.name,
+                                icon: staticInfo.icon,
+                                color: staticInfo.color
+                            };
+                        })
+                        .filter(item => item.prob >= 30.0)
+                        .sort((a, b) => b.prob - a.prob);
+                });
+
+                let particleInterval = null;
+                const launchParticles = () => {
+                    const btnContainer = document.getElementById('button-container');
+                    if (!btnContainer) return;
+                    const rect = btnContainer.getBoundingClientRect();
+                    const words = ['特征流提取', '文本向量化', '风险度量', 'Softmax决策', '合规判定'];
+
+                    const word = words[Math.floor(Math.random() * words.length)];
+                    particles.value.push({
+                        id: Math.random(),
+                        word: word,
+                        x: rect.width / 2 - 30,
+                        y: -10,
+                        mx: (Math.random() - 0.5) * 400,
+                        my: -(Math.random() * 200 + 150)
+                    });
+                    if (particles.value.length > 20) particles.value.shift();
+                };
+
+                const startAnalysis = async () => {
+                    if (isAnalyzing.value) return;
+                    console.log("前端准备发送给后端的文本", textInput.value);
+                    isAnalyzing.value = true;
+                    resultIndex.value = null;
+                    confidenceArray.value = [];
+                    errorMessage.value = '';
+
+                    particleInterval = setInterval(launchParticles, 120);
+
+                    try {
+                        const response = await fetch('/predict', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: textInput.value })
+                        });
+
+                        if (!response.ok) throw new Error(`HTTP 状态异常: ${response.status}`);
+
+                        const data = await response.json();
+
+                        clearInterval(particleInterval);
+                        isAnalyzing.value = false;
+
+                        resultIndex.value = parseInt(data.risk_label_id);
+                        confidenceArray.value = data.confidence_array || [];
+
+                    } catch (error) {
+                        clearInterval(particleInterval);
+                        isAnalyzing.value = false;
+                        errorMessage.value = error.message;
+                    }
+                };
+
+                return {
+                    textInput,
+                    isAnalyzing,
+                    resultIndex,
+                    confidenceArray,
+                    rankedConfidenceList,
+                    particles,
+                    tags,
+                    errorMessage,
+                    startAnalysis
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

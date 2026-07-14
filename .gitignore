@@ -1,14 +1,17 @@
-# 屏蔽PyCharm IDE配置文件夹
+# ── IDE ──────────────────────────────────────────────
 .idea/
 *.iml
+.vscode/
 
-# Python缓存
+# ── Python ───────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 env/
+venv/
+.venv/
 build/
 develop-eggs/
 dist/
@@ -24,19 +27,34 @@ var/
 .installed.cfg
 *.egg
 
-# 模型、数据集大文件（不上传git）
+# ── 模型权重 / 大文件（禁止上传）──────────────────────
 models/
+*.pkl
+*.safetensors
+*.bin
+*.onnx
+*.pt
+*.pth
+
+# ── 数据集 ──────────────────────────────────────────
 data/raw/
 data/processed/
 data/synthetic/
+data/knowledge/
 
-# 训练日志
+# ── 训练日志 ────────────────────────────────────────
 logs/
 *.log
 
-# Jupyter缓存
+# ── Jupyter ─────────────────────────────────────────
 .ipynb_checkpoints/
 
-# 系统垃圾文件
+# ── 系统垃圾文件 ────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# ── 数据集缓存 ──────────────────────────────────────
+.modelscope/
+
+# ── 压缩模型 ────────────────────────────────────────
+models/compressed/

@@ -1,40 +1,203 @@
-# FinCompliance-NLP 全局配置文件
+# ============================================================
+# ContractGuard-NLP 全局配置文件
+# 制造业合同财务风险智能识别系统 - 统一超参配置
+# 说明：所有数据路径、模型参数、训练超参均在此集中管理
+# ============================================================
 
+# ---------------------------
+# 1. 数据配置
+# ---------------------------
 data:
+  # 原始数据路径（不上传 Git）
   raw_dir: data/raw
+  raw_public_dir: data/raw/public          # 公开合同范本
+  raw_law_dir: data/raw/law                # 司法裁判案例（
+
+  # 清洗后的标准化数据集路径
   processed_dir: data/processed
-  synthetic_dir: data/synthetic
+  dataset_file: data/processed/contract_dataset.csv   # 全量合并数据集（
+  train_file: data/processed/train.csv                # 训练集（80%）
+  val_file: data/processed/val.csv                    # 验证集（10%）
+  test_file: data/processed/test.csv                  # 测试集（10%）
+
+  # LLM 合成数据路径
+  synthetic_dir: data/synthetic            # LLM 生成扩充仿真样本
+
+  # 数据集划分比例（训练:验证:测试 = 8:1:1）
   train_ratio: 0.8
   val_ratio: 0.1
   test_ratio: 0.1
 
+  # 数据集 Schema 字段（冻结不可修改）
+  schema:
+    - id                 # 样本唯一 ID
+    - text               # 单条合同条款纯文本
+    - label              # 风险标签 ID（0-5）
+    - source             # 数据来源：public公开/law司法/synthetic合成
+    - confidence         # 标签标注可信度（0-1）
+
+  # 数据规模目标
+  target:
+    public_count: 10000      # 公开合同范本目标条数
+    law_count: 5000          # 司法裁判案例目标条数
+    synthetic_count: 20000   # LLM 合成数据目标条数
+    total_count: 35000       # 合计目标条数
+
+# ---------------------------
+# 2. 风险标签体系（冻结不可修改）
+# ---------------------------
+risk_labels:
+  num_classes: 6
+  label_names:
+    0: normal_clause                 # 正常条款（无风险）
+    1: payment_risk                  # 付款周期风险（高风险）
+    2: tax_invoice_risk              # 税务发票风险（中风险）
+    3: delivery_acceptance_risk      # 交付验收风险（中风险）
+    4: liability_penalty_risk        # 违约责任风险（中高风险）
+    5: financial_compliance_risk     # 财务合规风险（高风险）
+  # 高风险类别（召回率要求 ≥92%）
+  high_risk_labels: [1, 5]
+
+# ---------------------------
+# 3. 文件解析配置
+# ---------------------------
+parsing:
+  supported_formats: ["pdf", "docx", "txt"]
+  # PDF 解析库：pdfplumber（推荐）/ PyPDF2
+  pdf_engine: pdfplumber
+  # TXT 编码自动识别
+  txt_encoding: utf-8
+  # 分句规则：按中文句号、分号、换行等切分条款
+  split_pattern: "[。；;\n]+"
+
+# ---------------------------
+# 4. 文本清洗配置
+# ---------------------------
+cleaning:
+  remove_header_footer: true     # 去除页眉页脚
+  remove_watermark: true         # 去除水印
+  remove_special_chars: true     # 去除特殊符号
+  remove_extra_whitespace: true  # 去除多余空白字符
+  remove_invalid_newlines: true  # 去除无效换行
+
+# ---------------------------
+# 5. 模型配置
+# ---------------------------
 model:
-  name: bert-base-chinese
-  num_labels: 2
-  max_length: 512
+  # Stage3 线上主模型选择：macbert / roberta-wwm
+  backbone: macbert
+  # 预训练模型路径（本地已下载，不再走 HuggingFace Hub）
+  pretrained_path: models/macbert_lora/chinese-macbert-base
+  # 最大序列长度
+  max_length: 256
+  # 分类数
+  num_labels: 6
 
+# ---------------------------
+# 6. 训练配置（4 阶段渐进式）
+# ---------------------------
 train:
-  epochs: 10
-  batch_size: 16
-  learning_rate: 2e-5
-  weight_decay: 0.01
-  warmup_ratio: 0.1
-  output_dir: models/bert_base
+  # 公共训练参数
+  seed: 42
+  device: auto                   # auto / cuda / cpu
+  output_dir: models
 
-compress:
-  quantize:
-    method: dynamic  # dynamic / static / qat
-  distill:
-    student_model: models/distilled_student
-    temperature: 4.0
-    alpha: 0.5
-  prune:
-    method: structured  # structured / unstructured
-    sparsity: 0.3
+  # Stage1：TF-IDF + 随机森林 基线
+  baseline:
+    tfidf_max_features: 10000
+    rf_n_estimators: 200
+    rf_max_depth: 50
+    output_dir: models/baseline
 
+  # Stage2：FastText 轻量模型
+  fasttext:
+    epoch: 25
+    lr: 0.5
+    wordNgrams: 2
+    dim: 100
+    output_dir: models/fasttext
+
+  # Stage3：MacBERT + LoRA 线上主模型
+  lora:
+    # LoRA 超参
+    r: 16                    # LoRA 秩
+    lora_alpha: 32           # LoRA 缩放因子
+    lora_dropout: 0.1
+    target_modules: ["query", "key", "value"]   # 注意力层适配
+    # 训练超参
+    epochs: 15
+    batch_size: 32
+    learning_rate: 0.00005
+    weight_decay: 0.01
+    warmup_ratio: 0.1
+    patience: 4
+    gamma: 1.0
+    output_dir: models/macbert_lora
+
+# ---------------------------
+# 7. 评估配置
+# ---------------------------
 evaluate:
-  metrics: ["accuracy", "f1", "precision", "recall"]
+  # 指标优先级（财务风控场景）：Recall > F1 > Precision > Accuracy
+  metrics: ["recall", "f1", "precision", "accuracy"]
+  # 核心风险类别召回率阈值
+  high_risk_recall_threshold: 0.92
+  output_dir: logs/evaluate
 
+# ---------------------------
+# 8. 推理配置
+# ---------------------------
 inference:
-  model_dir: models/bert_base
+  model_dir: models/macbert_lora    # 线上推理使用 LoRA 微调后的深度模型
   device: auto
+  max_length: 256
+  # 性能要求：单条条款推理 ≤200ms，百条合同批量 ≤10s
+  single_latency_ms: 200
+  batch_latency_s: 10
+
+# ---------------------------
+# 9. LLM 增强配置（Stage4 辅助能力）
+# ---------------------------
+llm:
+  # LLM API 配置（数据增强 + 风险解释）
+  provider: openai                 # openai / local
+  api_key: ${LLM_API_KEY}          # 从环境变量读取
+  base_url: https://api.openai.com/v1
+  model_name: gpt-4o-mini
+
+  # 数据增强 Prompt 配置
+  synthetic:
+    batch_size: 100                # 单次批量生成条数
+    temperature: 0.8
+    max_tokens: 200
+
+  # 风险解释配置
+  explainer:
+    temperature: 0.3               # 低温度保证解释稳定性
+    max_tokens: 500
+
+  # RAG 知识库配置
+  rag:
+    knowledge_dir: data/knowledge   # 企业财务制度/合同审核规范文档
+    top_k: 3                        # 检索 Top-K 条知识
+
+# ---------------------------
+# 10. FastAPI 服务配置
+# ---------------------------
+api:
+  host: 0.0.0.0
+  port: 8000
+  workers: 2
+  # 上传限制
+  max_upload_size_mb: 50
+  # 支持的 MIME 类型
+  allowed_types: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]
+
+# ---------------------------
+# 11. 日志配置
+# ---------------------------
+logging:
+  level: INFO
+  log_dir: logs
+  train_log_dir: logs/train
+  evaluate_log_dir: logs/evaluate
